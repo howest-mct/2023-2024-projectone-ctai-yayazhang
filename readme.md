@@ -1,9 +1,9 @@
-# Project Title
+# Smart Cat Feeder
 
-**FIRST & LAST NAME:** A B
+**FIRST & LAST NAME:** Yaya Zhang
 
-**Sparring Partner:** C D
+**Sparring Partner:** Tomas Rojka
 
-**Project Summary in max 10 words:** E
+**Project Summary in max 10 words:** Detect certain cat to give amounbt of food
 
-**Project Title:** F
+**Project Title:** Smart Cat Feeder
