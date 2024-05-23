@@ -1,12 +1,12 @@
 # Project Information
 
-**FIRST NAME LAST NAME:** A B
+**FIRST NAME LAST NAME:** Yaya Zhang
 
-**Sparring Partner:** C D
+**Sparring Partner:** Tomas Rojka
 
-**Project Summary in max 10 words:** E
+**Project Summary in max 10 words:** Smart feeder using AI to automatically feed and monitor cats.
 
-**Project Title:** F
+**Project Title:** Smart Cat Feeder
 
 # Tips for Feedback Conversations
 
@@ -32,17 +32,27 @@
 
 # Feedforward Conversations
 
-## Conversation 1 (Date: xx/xx/2024)
+## Conversation 1 (Date: 29/05/2024)
 
-Lecturer:
+Lecturer:  Tijn (electronics- maker)
 
 Questions for this conversation:
 
-- Question 1: V
+- [ ] Question 1: 
+- [ ] Question 2:
+- [ ] Question 3:
 
 This is the feedback on my questions.
 
-- Feedback 1: G
+- Feedback 1: 
+  > 
+
+- Feedback 2:
+  > 
+
+- Feedback 3:
+  > 
+
 
 ## Conversation 2 (Date: xx/xx/2024)
 
@@ -50,11 +60,21 @@ Lecturer:
 
 Questions for this conversation:
 
-- Question 1: V
+- [ ] Question 1: 
+- [ ] Question 2:
+- [ ] Question 3:
 
 This is the feedback on my questions.
 
-- Feedback 1: G
+- Feedback 1: 
+  > 
+
+- Feedback 2:
+  > 
+
+- Feedback 3:
+  > 
+  
 
 ## Conversation 3 (Date: xx/xx/2024)
 
@@ -62,8 +82,18 @@ Lecturer:
 
 Questions for this conversation:
 
-- [x] Question 1: V
+- [ ] Question 1: 
+- [ ] Question 2:
+- [ ] Question 3:
 
 This is the feedback on my questions.
 
-- Feedback 1: G
+- Feedback 1: 
+  > 
+
+- Feedback 2:
+  > 
+
+- Feedback 3:
+  > 
+  
