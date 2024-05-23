@@ -32,6 +32,30 @@
 
 # Feedforward Conversations
 
+## Conversation MVP01 (Date: 28/05/2024)
+
+Lecturer:  
+
+Questions for this conversation:
+
+- [ ] Question 1: 
+> 
+- [ ] Question 2:
+> 
+- [ ] Question 3:
+> 
+
+This is the feedback on my questions.
+
+- Feedback 1: 
+  > 
+
+- Feedback 2:
+  > 
+
+- Feedback 3:
+  > 
+
 ## Conversation 1 (Date: 29/05/2024)
 
 Lecturer:  Tijn (electronics- maker)
