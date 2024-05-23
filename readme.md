@@ -4,6 +4,6 @@
 
 **Sparring Partner:** Tomas Rojka
 
-**Project Summary in max 10 words:** Detect certain cat to give amounbt of food
+**Project Summary in max 10 words:** Smart feeder using AI to automatically feed and monitor cats.
 
 **Project Title:** Smart Cat Feeder
