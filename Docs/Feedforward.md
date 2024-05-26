@@ -57,8 +57,7 @@ This is the feedback on my questions.
   > 
 
 ## Conversation 1 (Date: 29/05/2024)
-
-Lecturer:  Tijn (electronics- maker)
+Lecturer:  **Tijn (electronics- maker)** 
 
 Questions for this conversation:
 
