@@ -38,23 +38,23 @@ Lecturer:
 
 Questions for this conversation:
 
-- [ ] Question 1: 
-> 
-- [ ] Question 2:
-> 
-- [ ] Question 3:
-> 
+- [x] Question 1: 
+> MVP for electronic part
+- [x] Question 2:
+> Issue of load model
+- [x] Question 3:
+> How to demo the project base on mine since my project using my own cats images's dataset
 
 This is the feedback on my questions.
 
 - Feedback 1: 
-  > 
+  > cleared about the mvp of the project on the electronic part, got some suggestions about the electronics
 
 - Feedback 2:
-  > 
+  > load model issue just fixed
 
 - Feedback 3:
-  > 
+  > got suggestion about how to show demo, for example can have the video save in the phone to show to the camera for detection, upload video can also work, but better to get fresh video of cats to show in from of the camera
 
 ## Conversation 1 (Date: 29/05/2024)
 Lecturer:  **Tijn (electronics- maker)** 
