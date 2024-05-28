@@ -1,0 +1,14 @@
+
+nc: 3
+names: ['Niuniu', 'Orange', 'human']
+
+roboflow:
+  workspace: label-foor-images
+  project: cat_feeder_project
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/label-foor-images/cat_feeder_project/dataset/1
+
+train: D:\CTAI\S2\Project One\2023-2024-projectone-ctai-yayazhang\AI\notebooks\cat_feeder_project-1\train\images
+val: D:\CTAI\S2\Project One\2023-2024-projectone-ctai-yayazhang\AI\notebooks\cat_feeder_project-1\valid\images
+test: D:\CTAI\S2\Project One\2023-2024-projectone-ctai-yayazhang\AI\notebooks\cat_feeder_project-1\test\images
