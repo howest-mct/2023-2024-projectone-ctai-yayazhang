@@ -1,130 +1,80 @@
-# from IPython.display import Video
-import sys
-import asyncio
-
-
-from queue import Queue
-import threading
-import time
-from BLE_client import run
-import cv2  # Importing the OpenCV library for computer vision tasks.
-import supervision as sv  # Importing a module named supervision as sv.
-# Importing YOLO object detection model from ultralytics library.
+import streamlit as st
+import cv2
 from ultralytics import YOLO
-import gradio as gr  # Importing Gradio library for creating web interfaces.
+import numpy as np
+import tempfile
 
-print("start")
+# Load the model
+model = YOLO('AI/model/detect_cat_v8.pt')
 
-model = YOLO("AI/runs/detect/train5/weights/best.pt")
-bounding_box_annotator = sv.BoundingBoxAnnotator()
-label_annotator = sv.LabelAnnotator()
+# page configuration
+st.set_page_config(page_title="Cat Detection", layout="wide")
+st.title("Cat Detection from Live Camera Feed or Uploaded Video")
 
-# Creating two Queues for communication between threads.
-tx_q = Queue()
-rx_q = Queue()
+# Confidence threshold slider
+conf_threshold = st.slider("Confidence Threshold", min_value=0.0, max_value=1.0, value=0.5)
 
-targetDeviceName=None
-targetDeviceMac="D8:3A:DD:D9:70:00"
+# image and text display placeholders
+image_placeholder = st.empty()
+results_placeholder = st.empty()
 
-def init_ble_thread():
-    # Creating a new thread for running a function 'run' with specified arguments.
-    ble_client_thread = threading.Thread(target=run, args=(
-        rx_q, tx_q, targetDeviceName, targetDeviceMac), daemon=True)
-    # Starting the thread execution.
-    ble_client_thread.start()
+# process video frames
+def process_video(video_path, conf_threshold, frame_skip=5):
+    cap = cv2.VideoCapture(video_path)
+    frame_count = 0
 
-
-# Defining a function named show_preds_video, which takes a video file path as input.
-def show_preds_video(video_path, conf_threshold):
-    # Opening the video file specified by the video_path.
-    cap = cv2.VideoCapture(video_path)  # Change to 0 for webcam...
-    # Extracting video properties: width, height, and frames per second (fps).
-    w, h, fps = (int(cap.get(x)) for x in (cv2.CAP_PROP_FRAME_WIDTH,
-                 cv2.CAP_PROP_FRAME_HEIGHT, cv2.CAP_PROP_FPS))
-    # Creating a VideoWriter object for writing the processed frames to an output video file.
-    out = cv2.VideoWriter('output_video.mp4',
-                          cv2.VideoWriter_fourcc(*'MJPG'), fps, (w, h))
-
-
-
-
-
-
-    # Looping through each frame of the video until it is opened.
-    while (cap.isOpened()):
-        # Reading the next frame from the video.
-        ret, img = cap.read()
-        # If frame is successfully read.
+    while cap.isOpened():
+        ret, frame = cap.read()
         if not ret:
             break
 
-        # Making predictions on the frame using the model.
-        # 'model' object should be defined somewhere.
-        result = model.predict(img)
-        result = result[0] if isinstance(result, list) else result
-        # Converting predictions to a format compatible with supervision module.
-        detections = sv.Detections.from_ultralytics(result)
-        # Filtering out detections based on confidence threshold.
-        detections = detections[detections.confidence > conf_threshold]
+        frame_count += 1
+        if frame_count % frame_skip != 0:
+            continue
 
-        # Counting the number of drones detected.
-        ndrones = len(detections[detections.class_id == 0])
+        # Perform inference
+        results = model(frame)
+        annotated_frame = frame.copy()
+        predictions = []
 
-        # Extracting labels for detected objects.
-        labels = [
-            model.model.names[class_id]
-            for class_id
-            in detections.class_id
-        ]
+        # Extract results
+        for result in results:
+            for bbox in result.boxes.data:
+                x1, y1, x2, y2, score, class_id = bbox
+                if score >= conf_threshold:
+                    label = model.names[int(class_id)]
+                    predictions.append(f"Class: {label}, Confidence: {score:.2f}")
+                    cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
+                    cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
 
-        # Annotating bounding boxes on the frame.
-        annotated_frame = bounding_box_annotator.annotate(
-            scene=img.copy(), detections=detections)
-        # Annotating labels on the frame.
-        annotated_frame = label_annotator.annotate(
-            scene=annotated_frame, detections=detections, labels=labels)
+        # Convert the frame to RGB for Streamlit
+        annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+        
+        # Display the image
+        image_placeholder.image(annotated_frame, channels="RGB")
 
-        # Writing the annotated frame to the output video.
-        out.write(annotated_frame)
-        # Displaying the annotated frame.
+        # Display prediction results
+        results_placeholder.text("\n".join(predictions))
 
-        # Sending data to the Bluetooth device.
-        tx_q.put(str(ndrones))
-        print("ndrones: ", ndrones)
+    # Release the video capture
+    cap.release()
 
-        yield annotated_frame, ndrones
+# webcam or upload video choice
+st.sidebar.title("Video Source")
+source = st.sidebar.radio("Choose the video source", ("Webcam", "Upload"))
 
-    # Releasing the output video writer.
-    out.release()
+if source == "Webcam":
+    # Initialize video capture
+    cap = cv2.VideoCapture(0) 
 
-    interface_video.close()
-    
+    # Run detection on video frames
+    process_video(0, conf_threshold)
 
-
-# Defining inputs and outputs for the Gradio interface.
-inputs_video = [
-    gr.components.Video(label="Input video"),
-    gr.Slider(minimum=0, maximum=1, value=0.25, label="Confidence threshold")
-]
-outputs_video = [
-    gr.components.Image(type="numpy", label="Analysed video"),
-    gr.Textbox(label="Amount of drones"),
-]
-# Creating a Gradio interface with specified inputs, outputs, and other settings.
-interface_video = gr.Interface(
-    fn=show_preds_video,
-    inputs=inputs_video,
-    outputs=outputs_video,
-    title="Bee detector",
-    cache_examples=False,
-)
-
-
-# Launching the Gradio interface.
-if __name__ == '__main__':
-    print("launching BLE thread")
-    init_ble_thread()
-    time.sleep(1) # little breathing room for BLE to start
-    print("launching GradIO interface")
-    interface_video.launch()
-    
+else:
+    uploaded_file = st.sidebar.file_uploader("Upload a video", type=["mp4", "mov", "avi", "mkv"])
+    if uploaded_file is not None:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            tmp_file.write(uploaded_file.read())
+            tmp_file_path = tmp_file.name
+        
+        process_video(tmp_file_path, conf_threshold)
