@@ -47,7 +47,7 @@ def process_video(video_path, conf_threshold, frame_skip=5):
                     cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
                     cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
 
-        # Convert the frame to RGB for Streamlit
+        # Convert the frame to RGB
         annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
         
         # Display the image
@@ -71,7 +71,7 @@ if source == "Webcam":
     process_video(0, conf_threshold)
 
 else:
-    uploaded_file = st.sidebar.file_uploader("Upload a video", type=["mp4", "mov", "avi", "mkv"])
+    uploaded_file = st.sidebar.file_uploader("Upload a video", type=["mp4"])
     if uploaded_file is not None:
         with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
             tmp_file.write(uploaded_file.read())
