@@ -61,20 +61,18 @@ Lecturer:  **Tijn (electronics- maker)**
 
 Questions for this conversation:
 
-- [ ] Question 1: 
-- [ ] Question 2:
-- [ ] Question 3:
+- [x] Question 1: 
+> what should i use for making the cat feeder? does plastic water bottle ok to use? 
+- [x] Question 2:
+> how do i keep the cardbord lid steady on the bottle without moving before everything start
 
 This is the feedback on my questions.
 
 - Feedback 1: 
-  > 
-
+Tijn specified that the idea i have will be very difficute to make, especially i need to keep everything steady and no stuck food.
 - Feedback 2:
-  > 
+> Tijn gave me another idea of how to make the this cat feeder and its also much easier, only the small part that connect to the top part of the step motor needs to use laser cut to make one. 
 
-- Feedback 3:
-  > 
 
 
 ## Conversation 2 (Date: xx/xx/2024)
