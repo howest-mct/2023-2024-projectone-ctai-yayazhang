@@ -54,7 +54,7 @@ st.set_page_config(page_title="Cat Detection", layout="wide")
 st.title("Cat Detection")
 
 # Threshold slider
-conf_threshold = st.slider("Confidence Threshold", min_value=0.0, max_value=1.0, value=0.5)
+conf_threshold = st.slider("Confidence Threshold", min_value=0.0, max_value=1.0, value=0.7)
 
 image_placeholder = st.empty()
 results_placeholder = st.empty()
@@ -88,16 +88,25 @@ def process_video(video_source, conf_threshold, frame_skip=5):
                     cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
                     cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
 
-                    # Send command to Raspberry Pi based on detection result
+                    # Send command to Raspberry Pi based on detection and confidence
                     if label == 'Orange':
-                        client_socket.sendall('cat orange'.encode())
-                        feeder_status.text("Feeder Status: Opening for Cat Orange")
+                        if score >= 0.7:
+                            print("Sending 'cat orange' to Raspberry Pi")
+                            client_socket.sendall('cat orange'.encode())
+                            feeder_status.text("Feeder Status: Opening for Cat Orange")
+                        else:
+                            print("Sending 'close' to Raspberry Pi")
+                            client_socket.sendall('close'.encode())
+                            feeder_status.text("Feeder Status: Closed")
                     elif label == 'Niuniu':
-                        client_socket.sendall('cat niuniu'.encode())
-                        feeder_status.text("Feeder Status: Opening for Cat Niuniu")
-                    else:
-                        client_socket.sendall('close'.encode())
-                        feeder_status.text("Feeder Status: Closed")
+                        if score >= 0.7:
+                            print("Sending 'cat niuniu' to Raspberry Pi")
+                            client_socket.sendall('cat niuniu'.encode())
+                            feeder_status.text("Feeder Status: Opening for Cat Niuniu")
+                        else:
+                            print("Sending 'close' to Raspberry Pi")
+                            client_socket.sendall('close'.encode())
+                            feeder_status.text("Feeder Status: Closed")
 
         annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
         image_placeholder.image(annotated_frame, channels="RGB")
