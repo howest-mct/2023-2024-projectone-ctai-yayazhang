@@ -1,35 +1,35 @@
-import RPi.GPIO as GPIO
-import time
+import RPi as GPIO
+from time import sleep
 
-SERVO_PIN = 18 
+# Setup GPIO
 GPIO.setmode(GPIO.BCM)
-GPIO.setup(SERVO_PIN, GPIO.OUT)
+GPIO.setup(21, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(18, GPIO.OUT)
 
-servo = GPIO.PWM(SERVO_PIN, 50)
-servo.start(0)
+servo_pwm = GPIO.PWM(18, 50)
+servo_pwm.start(0)
 
 def set_servo_angle(angle):
-    duty = angle / 18 + 2
-    GPIO.output(SERVO_PIN, True)
-    servo.ChangeDutyCycle(duty)
-    time.sleep(1)
-    GPIO.output(SERVO_PIN, False)
-    servo.ChangeDutyCycle(0)
-    print(f"Servo moved to {angle} degrees")
+    duty_cycle = 2.5 + (angle / 18.0)
+    servo_pwm.ChangeDutyCycle(duty_cycle)
+    sleep(0.5) 
+    servo_pwm.ChangeDutyCycle(0) 
 
 try:
+    current_angle = 0
+    set_servo_angle(current_angle) 
+    print("Press and hold GPIO 21 to toggle the servo motor between 0 and 180 degrees.")
     while True:
-        print("Rotating to 0 degrees")
-        set_servo_angle(0)    # Test with 0 degree
-        time.sleep(2)
-        print("Rotating to 90 degrees")
-        set_servo_angle(90)   # Test with 90 degrees
-        time.sleep(2)
-        print("Rotating to 180 degrees")
-        set_servo_angle(180)  # Test with 180 degrees
-        time.sleep(2)
+        if GPIO.input(21) == GPIO.LOW:
+            print("Button pressed, moving servo motor")
+            current_angle = 180 if current_angle == 0 else 0 
+            set_servo_angle(current_angle)
+            sleep(0.5)
+        else:
+            sleep(0.1) 
+
 except KeyboardInterrupt:
-    print("Stopping")
+    print("Program stopped by user")
 finally:
-    servo.stop()
+    servo_pwm.stop()
     GPIO.cleanup()
