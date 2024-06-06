@@ -56,11 +56,11 @@ def handle_client(sock, shutdown_flag):
             message = data.decode()
             print(f"Received from client: {message}")
             if message == 'cat orange':
-                set_servo_angle(90)  # Rotate to Cat Orange's food
+                set_servo_angle(120)  # Rotate to Orange Food
             elif message == 'cat niuniu':
-                set_servo_angle(0)  # Rotate to Cat Niuniu's food
+                set_servo_angle(0)  # Rotate to Niuniu Food
             elif message == 'close':
-                set_servo_angle(180)  # Rotate to closed position
+                set_servo_angle(60)  # Rotate to Close (Open Shade)
     except socket.timeout:
         pass
     except Exception as e:

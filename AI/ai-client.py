@@ -1,12 +1,11 @@
 import socket
 import threading
-import time
 import cv2
 from ultralytics import YOLO
 import tempfile
 import streamlit as st
 
-# connect to rpi
+# Connect to Raspberry Pi
 server_address = ('192.168.168.167', 8500)
 client_socket = None
 receive_thread = None
@@ -42,7 +41,7 @@ def receive_messages(sock, shutdown_flag):
     finally:
         sock.close()
 
-# call socket client
+# Call socket client
 setup_socket_client()
 
 # Load the model
@@ -59,9 +58,14 @@ image_placeholder = st.empty()
 results_placeholder = st.empty()
 feeder_status = st.empty()
 
+# Initial states
+current_state = 'close'
+cat_detected = False
+
 def process_video(video_source, conf_threshold, frame_skip=5):
+    global current_state, cat_detected
+
     cap = cv2.VideoCapture(video_source)
-    
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     frame_count = 0
 
@@ -79,7 +83,8 @@ def process_video(video_source, conf_threshold, frame_skip=5):
         annotated_frame = frame.copy()
         predictions = []
 
-        # Extract results
+        # Check if any cat is detected with confidence above threshold
+        cat_detected = False
         for result in results:
             for bbox in result.boxes.data:
                 x1, y1, x2, y2, score, class_id = bbox
@@ -89,20 +94,26 @@ def process_video(video_source, conf_threshold, frame_skip=5):
                     cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
                     cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
 
-                    # Send command to Raspberry Pi based on detection result
-                    if label == 'Orange':
-                        client_socket.sendall('cat orange'.encode())
-                        feeder_status.text("Feeder Status: Opening for Cat Orange")
-                    elif label == 'Niuniu':
-                        client_socket.sendall('cat niuniu'.encode())
-                        feeder_status.text("Feeder Status: Opening for Cat Niuniu")
-                    else:
-                        client_socket.sendall('close'.encode())
-                        feeder_status.text("Feeder Status: Closed")
+                    if label == 'Orange' and score >= 0.6:
+                        if current_state != 'cat orange':
+                            client_socket.sendall('cat orange'.encode())
+                            current_state = 'cat orange'
+                            feeder_status.text("Feeder Status: Opening for Cat Orange")
+                        cat_detected = True
+                    elif label == 'Niuniu' and score >= 0.6:
+                        if current_state != 'cat niuniu':
+                            client_socket.sendall('cat niuniu'.encode())
+                            current_state = 'cat niuniu'
+                            feeder_status.text("Feeder Status: Opening for Cat Niuniu")
+                        cat_detected = True
+
+        if not cat_detected and current_state != 'close':
+            client_socket.sendall('close'.encode())
+            current_state = 'close'
+            feeder_status.text("Feeder Status: Closed")
 
         annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
         image_placeholder.image(annotated_frame, channels="RGB")
-
         results_placeholder.text("\n".join(predictions))
 
     cap.release()
