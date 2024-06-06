@@ -46,7 +46,7 @@ def receive_messages(sock, shutdown_flag):
 setup_socket_client()
 
 # Load the model
-model = YOLO('AI/model/detect_cat_v8.pt')
+model = YOLO('AI/model/detect_cat_v9.pt')
 
 # Page configuration
 st.set_page_config(page_title="Cat Detection", layout="wide")
