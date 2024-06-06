@@ -1,6 +1,7 @@
 import socket
 import threading
 import time
+import cv2
 from RPi import GPIO
 
 # GPIO setup
@@ -48,8 +49,16 @@ def accept_connections(shutdown_flag):
             pass
 
 def handle_client(sock, shutdown_flag):
+    cap = cv2.VideoCapture(0)  # Capture video from the Pi camera
     try:
         while not shutdown_flag.is_set():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            _, buffer = cv2.imencode('.jpg', frame)
+            sock.sendall(buffer.tobytes())
+
             data = sock.recv(1024)
             if not data:
                 break
@@ -67,6 +76,7 @@ def handle_client(sock, shutdown_flag):
         print(f"Error: {e}")
     finally:
         sock.close()
+        cap.release()
 
 try:
     setup_socket_server()
