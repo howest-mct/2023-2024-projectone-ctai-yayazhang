@@ -10,7 +10,7 @@ GPIO.setup(SERVO_PIN, GPIO.OUT)
 servo = GPIO.PWM(SERVO_PIN, 50) 
 servo.start(0)
 
-# Global vars for use in methods/threads
+# Global vars
 client_socket = None
 server_socket = None
 server_thread = None
