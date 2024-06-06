@@ -1,15 +1,17 @@
 import socket
 import threading
 import cv2
+import numpy as np
 from ultralytics import YOLO
-import tempfile
 import streamlit as st
+import queue
 
 # Connect to Raspberry Pi
 server_address = ('192.168.168.167', 8500)
 client_socket = None
 receive_thread = None
 shutdown_flag = threading.Event()
+frame_queue = queue.Queue()
 
 def setup_socket_client():
     global client_socket, receive_thread
@@ -17,22 +19,26 @@ def setup_socket_client():
     client_socket.connect(server_address)
     print("Connected to server")
 
-    receive_thread = threading.Thread(target=receive_messages, args=(client_socket, shutdown_flag))
+    receive_thread = threading.Thread(target=receive_video_stream, args=(client_socket, shutdown_flag, frame_queue))
     receive_thread.start()
 
-def receive_messages(sock, shutdown_flag):
+def receive_video_stream(sock, shutdown_flag, frame_queue):
     sock.settimeout(1)
-    counter = 0
+    data = b''
     try:
         while not shutdown_flag.is_set():
             try:
-                data = sock.recv(1024)
-                if not data:
+                packet = sock.recv(4096)
+                if not packet:
                     break
-                print("Received from server:", data.decode())
-                counter += 1
-                response = "{} message(s) received".format(counter)
-                sock.sendall(response.encode())
+                data += packet
+                a = data.find(b'\xff\xd8')
+                b = data.find(b'\xff\xd9')
+                if a != -1 and b != -1:
+                    jpg = data[a:b+2]
+                    data = data[b+2:]
+                    frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                    frame_queue.put(frame)
             except socket.timeout:
                 continue
     except Exception as e:
@@ -40,6 +46,54 @@ def receive_messages(sock, shutdown_flag):
             print(f"Connection error: {e}")
     finally:
         sock.close()
+
+def process_frame(frame, sock):
+    results = model(frame)
+    annotated_frame = frame.copy()
+    predictions = []
+
+    global current_state, cat_detected
+    cat_detected = False
+    for result in results:
+        for bbox in result.boxes.data:
+            x1, y1, x2, y2, score, class_id = bbox
+            if score >= conf_threshold:
+                label = model.names[int(class_id)]
+                predictions.append(f"Class: {label}, Confidence: {score:.2f}")
+                cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
+                cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+
+                if label == 'Orange' and score >= 0.6:
+                    if current_state != 'cat orange':
+                        sock.sendall('cat orange'.encode())
+                        current_state = 'cat orange'
+                        st.session_state['feeder_status'] = "Feeder Status: Opening for Cat Orange"
+                    cat_detected = True
+                elif label == 'Niuniu' and score >= 0.6:
+                    if current_state != 'cat niuniu':
+                        sock.sendall('cat niuniu'.encode())
+                        current_state = 'cat niuniu'
+                        st.session_state['feeder_status'] = "Feeder Status: Opening for Cat Niuniu"
+                    cat_detected = True
+
+    if not cat_detected and current_state != 'close':
+        sock.sendall('close'.encode())
+        current_state = 'close'
+        st.session_state['feeder_status'] = "Feeder Status: Closed"
+
+    annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+    st.session_state['annotated_frame'] = annotated_frame
+    st.session_state['predictions'] = predictions
+
+# Initialize Streamlit session state
+if 'frame' not in st.session_state:
+    st.session_state['frame'] = None
+if 'annotated_frame' not in st.session_state:
+    st.session_state['annotated_frame'] = None
+if 'predictions' not in st.session_state:
+    st.session_state['predictions'] = []
+if 'feeder_status' not in st.session_state:
+    st.session_state['feeder_status'] = "Feeder Status: Closed"
 
 # Call socket client
 setup_socket_client()
@@ -62,74 +116,17 @@ feeder_status = st.empty()
 current_state = 'close'
 cat_detected = False
 
-def process_video(video_source, conf_threshold, frame_skip=5):
-    global current_state, cat_detected
+# Main loop to update Streamlit UI
+while True:
+    if not frame_queue.empty():
+        frame = frame_queue.get()
+        if frame is not None:
+            process_frame(frame, client_socket)
 
-    cap = cv2.VideoCapture(video_source)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    frame_count = 0
+    if st.session_state['annotated_frame'] is not None:
+        image_placeholder.image(st.session_state['annotated_frame'], channels="RGB")
+    
+    if st.session_state['predictions']:
+        results_placeholder.text("\n".join(st.session_state['predictions']))
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        frame_count += 1
-        if frame_count % frame_skip != 0:
-            continue
-
-        # Inference
-        results = model(frame)
-        annotated_frame = frame.copy()
-        predictions = []
-
-        # Check if any cat is detected with confidence above threshold
-        cat_detected = False
-        for result in results:
-            for bbox in result.boxes.data:
-                x1, y1, x2, y2, score, class_id = bbox
-                if score >= conf_threshold:
-                    label = model.names[int(class_id)]
-                    predictions.append(f"Class: {label}, Confidence: {score:.2f}")
-                    cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
-                    cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
-
-                    if label == 'Orange' and score >= 0.6:
-                        if current_state != 'cat orange':
-                            client_socket.sendall('cat orange'.encode())
-                            current_state = 'cat orange'
-                            feeder_status.text("Feeder Status: Opening for Cat Orange")
-                        cat_detected = True
-                    elif label == 'Niuniu' and score >= 0.6:
-                        if current_state != 'cat niuniu':
-                            client_socket.sendall('cat niuniu'.encode())
-                            current_state = 'cat niuniu'
-                            feeder_status.text("Feeder Status: Opening for Cat Niuniu")
-                        cat_detected = True
-
-        if not cat_detected and current_state != 'close':
-            client_socket.sendall('close'.encode())
-            current_state = 'close'
-            feeder_status.text("Feeder Status: Closed")
-
-        annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-        image_placeholder.image(annotated_frame, channels="RGB")
-        results_placeholder.text("\n".join(predictions))
-
-    cap.release()
-
-# Webcam or upload video choice
-st.sidebar.title("Video Source")
-source = st.sidebar.radio("Choose the video source", ("Webcam", "Upload"))
-
-if source == "Webcam":
-    # Initialize video capture
-    process_video(0, conf_threshold)
-else:
-    uploaded_file = st.sidebar.file_uploader("Upload a video", type=["mp4"])
-    if uploaded_file is not None:
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-            tmp_file.write(uploaded_file.read())
-            tmp_file_path = tmp_file.name
-        
-        process_video(tmp_file_path, conf_threshold)
+    feeder_status.text(st.session_state['feeder_status'])
