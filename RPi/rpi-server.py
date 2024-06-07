@@ -2,6 +2,7 @@ import socket
 import threading
 import time
 from RPi import GPIO
+import cv2
 
 # GPIO setup
 SERVO_PIN = 18 
@@ -48,14 +49,19 @@ def accept_connections(shutdown_flag):
             pass
 
 def handle_client(sock, shutdown_flag):
+    global cap
     try:
         while not shutdown_flag.is_set():
             data = sock.recv(1024)
             if not data:
                 break
-            message = data.decode()
+            message = data.decode(errors='ignore')
             print(f"Received from client: {message}")
-            if message == 'cat orange':
+            if message == 'start_video':
+                cap = cv2.VideoCapture(0)
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                send_video(sock)
+            elif message == 'cat orange':
                 set_servo_angle(120)  # Rotate to Orange Food
             elif message == 'cat niuniu':
                 set_servo_angle(0)  # Rotate to Niuniu Food
@@ -66,7 +72,20 @@ def handle_client(sock, shutdown_flag):
     except Exception as e:
         print(f"Error: {e}")
     finally:
+        if 'cap' in globals():
+            cap.release()
         sock.close()
+
+def send_video(sock):
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            _, buffer = cv2.imencode('.jpg', frame)
+            sock.sendall(buffer.tobytes() + b"END_FRAME")
+    except Exception as e:
+        print(f"Error sending video frame: {e}")
 
 try:
     setup_socket_server()
