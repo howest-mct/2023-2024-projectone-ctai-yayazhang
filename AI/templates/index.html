@@ -4,26 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cat Detection</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-        .container {
-            text-align: center;
-        }
-        .slider {
-            width: 300px;
-        }
-        .video-feed {
-            width: 640px;
-            height: 480px;
-            border: 1px solid #ddd;
-            margin: 10px auto;
-        }
-        .predictions {
-            margin-top: 20px;
-        }
-    </style>
+    <link rel="stylesheet" href="static/styles.css">
 </head>
 <body>
     <div class="container">
@@ -44,57 +25,13 @@
         </div>
         <div class="predictions" id="predictions" style="display:none;">
             <h2>Predictions</h2>
-            <ul id="prediction-list"></ul>
+            <ul id="prediction-list">
+                <li>Detected Cat: <span id="detected-cat">None</span></li>
+                <li>Confidence: <span id="confidence">0.00</span></li>
+                <li>Food Door Status: <span id="food-door-status">Closed</span></li>
+            </ul>
         </div>
     </div>
-    <script>
-        const showStream = () => {
-            document.querySelector('#selection-page').style.display = 'none';
-            document.querySelector('#video-stream').style.display = 'block';
-            document.querySelector('#predictions').style.display = 'block';
-        };
-
-        const showUpload = () => {
-            document.querySelector('#selection-page').style.display = 'none';
-            document.querySelector('#video-upload').style.display = 'block';
-            document.querySelector('#predictions').style.display = 'block';
-        };
-
-        const fetchPredictions = () => {
-            fetch('/predictions')
-                .then(response => response.json())
-                .then(data => {
-                    const predictionList = document.querySelector('#prediction-list');
-                    predictionList.innerHTML = data.predictions.map(prediction => `<li>${prediction}</li>`).join('');
-                });
-        };
-
-        setInterval(fetchPredictions, 1000);
-
-        document.querySelector('#upload-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData();
-            const fileInput = document.querySelector('#video-file');
-            formData.append('video-file', fileInput.files[0]);
-
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                const uploadedVideo = document.querySelector('#uploaded-video');
-                uploadedVideo.src = URL.createObjectURL(fileInput.files[0]);
-                uploadedVideo.style.display = 'block';
-                await fetch('/process_video');
-                console.log('Video processed');
-            } catch (error) {
-                console.error('Error uploading or processing video:', error);
-            }
-        });
-
-        document.querySelector('#stream-btn').addEventListener('click', showStream);
-        document.querySelector('#upload-btn').addEventListener('click', showUpload);
-    </script>
+    <script src="static/script.js"></script>
 </body>
 </html>

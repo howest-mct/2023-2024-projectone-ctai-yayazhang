@@ -6,8 +6,6 @@ import time
 import requests
 from flask import Flask, render_template, Response, jsonify, request
 from ultralytics import YOLO
-import os
-import tempfile
 
 server_address = ('192.168.168.167', 8500)  # Raspberry Pi IP and port
 
@@ -15,8 +13,8 @@ client_socket = None
 receive_thread = None
 shutdown_flag = threading.Event()
 
-model = YOLO('AI/model/detect_cat_v9.pt')
-conf_threshold = 0.6
+model = YOLO('AI/model/detect_cat_v8.pt')
+conf_threshold = 0.55  # Updated confidence threshold
 raspberry_pi_ip = '192.168.168.167'  # Raspberry Pi IP address
 
 bbox_colors = {
@@ -24,12 +22,12 @@ bbox_colors = {
     'Niuniu': (255, 0, 0)  # Red for Niuniu
 }
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 
 # Global variable to store annotated frame and predictions
 annotated_frame = None
 predictions = []
-uploaded_video_path = None
+current_cat = None
 
 def setup_socket_client():
     global client_socket, receive_thread
@@ -47,7 +45,7 @@ def receive_messages(sock, shutdown_flag):
     try:
         while not shutdown_flag.is_set():
             try:
-                packet = sock.recv(4096)
+                packet = sock.recv(1024)  # Use a smaller buffer size to reduce latency
                 if not packet:
                     break
                 data += packet
@@ -69,10 +67,9 @@ def receive_messages(sock, shutdown_flag):
         sock.close()
 
 def process_frame(frame):
-    global predictions
+    global current_cat
     results = model(frame)
     annotated_frame = frame.copy()
-    cat_detected = False
     predictions = []
 
     for result in results:
@@ -85,15 +82,14 @@ def process_frame(frame):
                 cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
                 cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
-                if label == 'Orange' and score >= 0.6:
-                    send_command('cat_orange')
-                    cat_detected = True
-                elif label == 'Niuniu' and score >= 0.6:
-                    send_command('cat_niuniu')
-                    cat_detected = True
+                if score >= 0.55:
+                    if current_cat != label:
+                        send_command(f"cat_{label.lower()}")
+                        current_cat = label
 
-                if not cat_detected:
-                    send_command('close')
+    if current_cat and not any(label in p for p in predictions):
+        send_command('close')
+        current_cat = None
 
     return annotated_frame, predictions
 
@@ -113,7 +109,7 @@ def video_feed():
                 frame = buffer.tobytes()
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            time.sleep(0.1)
+            time.sleep(0.05)  # Reduce the sleep time to increase frame rate
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/predictions')
@@ -122,34 +118,28 @@ def get_predictions():
 
 @app.route('/upload', methods=['POST'])
 def upload_video():
-    global uploaded_video_path
     if 'video-file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-
+        return jsonify({'error': 'No video file part'}), 400
     file = request.files['video-file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
+    file.save('uploads/' + file.filename)
+    return jsonify({'success': 'File uploaded successfully'}), 200
 
-    if file:
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-        file.save(temp_file.name)
-        uploaded_video_path = temp_file.name
-        return jsonify({'filename': temp_file.name})
-
-@app.route('/process_video')
+@app.route('/process_video', methods=['POST'])
 def process_uploaded_video():
-    global uploaded_video_path
-    if uploaded_video_path is None:
-        return jsonify({'error': 'No uploaded video found'}), 400
+    video_path = 'uploads/' + request.files['video-file'].filename
+    cap = cv2.VideoCapture(video_path)
+    global annotated_frame, predictions
 
-    cap = cv2.VideoCapture(uploaded_video_path)
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
-        process_frame(frame)
+        annotated_frame, predictions = process_frame(frame)
+
     cap.release()
-    return '', 204
+    return jsonify({'success': 'Video processed successfully'}), 200
 
 def main():
     global client_socket, receive_thread
