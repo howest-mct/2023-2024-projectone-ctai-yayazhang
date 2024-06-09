@@ -21,7 +21,7 @@
 
 # Python project
 config.py
-*.css
+
 *.css.map
 
 # Byte-compiled / optimized / DLL files

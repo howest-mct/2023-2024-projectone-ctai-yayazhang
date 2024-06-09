@@ -1,0 +1,31 @@
+body {
+    font-family: Arial, sans-serif;
+}
+
+.container {
+    margin-top: 3.125rem; 
+}
+
+.video-feed {
+    border: 0.0625rem solid #ddd; 
+    margin: 1.25rem auto; 
+}
+
+.predictions {
+    margin-top: 1.25rem; 
+}
+
+button {
+    margin: 0.625rem; 
+}
+
+form {
+    margin: 1.25rem;
+}
+
+#prediction-list,
+#prediction-list-upload {
+    text-align: left;
+    margin: 0 auto;
+    max-width: 25rem;
+}
