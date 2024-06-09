@@ -1,46 +1,80 @@
 import socket
 import threading
 import time
-from RPi import GPIO
+from flask import Flask, Response, request
 import cv2
+from RPi import GPIO
 
-# GPIO setup
-SERVO_PIN = 18 
+# Initialize the camera
+camera = cv2.VideoCapture(0)
+
+# GPIO setup for the servo motor
+SERVO_PIN = 18
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SERVO_PIN, GPIO.OUT)
-servo = GPIO.PWM(SERVO_PIN, 50) 
+servo = GPIO.PWM(SERVO_PIN, 50)
 servo.start(0)
 
-# Global vars
+app = Flask(__name__)
+
+# Global vars for use in methods/threads
 client_socket = None
 server_socket = None
 server_thread = None
 shutdown_flag = threading.Event()
 
-# set servo motor anfle
 def set_servo_angle(angle):
     duty = angle / 18 + 2
     GPIO.output(SERVO_PIN, True)
     servo.ChangeDutyCycle(duty)
-
-    time.sleep(1) # servo to move
+    time.sleep(1)
     GPIO.output(SERVO_PIN, False)
-    servo.ChangeDutyCycle(0) # stop servo
+    servo.ChangeDutyCycle(0)
     print(f"Servo moved to {angle} degrees")
 
-# setup servo socket , start listening for connections
+@app.route('/video_feed')
+def video_feed():
+    def generate_frames():
+        while True:
+            success, frame = camera.read()
+            if not success:
+                break
+            else:
+                ret, buffer = cv2.imencode('.jpg', frame)
+                frame = buffer.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/command', methods=['POST'])
+def command():
+    global current_state
+    data = request.json
+    command = data.get('command')
+    print(f"Received command: {command}")
+
+    if command == 'cat_orange':
+        set_servo_angle(120)
+        current_state = 'cat orange'
+    elif command == 'cat_niuniu':
+        set_servo_angle(0)
+        current_state = 'cat niuniu'
+    elif command == 'close':
+        set_servo_angle(60)
+        current_state = 'close'
+    return '', 204
+
 def setup_socket_server():
     global server_socket, server_thread, shutdown_flag
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(('0.0.0.0', 8500)) # binding all interfaces on the port 8500
-    server_socket.settimeout(0.2) # set timeout for socket operations
-    server_socket.listen(1) # listen for incoming connections
-    
-    # start a thread to accept incoming connection
+    server_socket.bind(('0.0.0.0', 8500))
+    server_socket.settimeout(0.2)
+    server_socket.listen(1)
+
     server_thread = threading.Thread(target=accept_connections, args=(shutdown_flag,), daemon=True)
     server_thread.start()
 
-# accetpt incoming client connection
 def accept_connections(shutdown_flag):
     global client_socket
     print("Accepting connections")
@@ -53,49 +87,44 @@ def accept_connections(shutdown_flag):
         except socket.timeout:
             pass
 
-# communication with client side
 def handle_client(sock, shutdown_flag):
-    global cap
     try:
         while not shutdown_flag.is_set():
-            data = sock.recv(1024) # receive data from client
+            data = sock.recv(1024)
             if not data:
                 break
             message = data.decode(errors='ignore')
             print(f"Received from client: {message}")
             if message == 'start_video':
-                cap = cv2.VideoCapture(0) # open external camera
-                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 send_video(sock)
-            elif message == 'cat orange':
-                set_servo_angle(120)  # Rotate to Orange Food
-            elif message == 'cat niuniu':
-                set_servo_angle(0)  # Rotate to Niuniu Food
+            elif message == 'cat_orange':
+                set_servo_angle(120)
+            elif message == 'cat_niuniu':
+                set_servo_angle(0)
             elif message == 'close':
-                set_servo_angle(60)  # Rotate to Close (Open Shade)
+                set_servo_angle(60)
     except socket.timeout:
         pass
     except Exception as e:
         print(f"Error: {e}")
     finally:
-        if 'cap' in globals():
-            cap.release()
         sock.close()
 
-# send video frame to client
 def send_video(sock):
     try:
         while True:
-            ret, frame = cap.read() # read frame from camera
+            ret, frame = camera.read()
             if not ret:
                 break
             _, buffer = cv2.imencode('.jpg', frame)
-            sock.sendall(buffer.tobytes() + b"END_FRAME") # add delimiter to seprate frame
+            sock.sendall(buffer.tobytes() + b"END_FRAME")
     except Exception as e:
         print(f"Error sending video frame: {e}")
 
+###### MAIN PART ######
 try:
     setup_socket_server()
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
     while True:
         time.sleep(10)
 except KeyboardInterrupt:
