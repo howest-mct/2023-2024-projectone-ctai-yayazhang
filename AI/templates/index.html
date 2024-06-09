@@ -28,11 +28,11 @@
 <body>
     <div class="container">
         <h1>Raspberry Pi Cat Detection</h1>
-        <div>
-            <button onclick="showStream()">Stream Video</button>
-            <button onclick="showUpload()">Upload Video</button>
+        <div id="selection-page">
+            <button id="stream-btn">Stream Video</button>
+            <button id="upload-btn">Upload Video</button>
         </div>
-        <div class="video-feed" id="video-stream">
+        <div class="video-feed" id="video-stream" style="display:none;">
             <img id="video" src="/video_feed" alt="Video Feed">
         </div>
         <div id="video-upload" style="display:none;">
@@ -42,57 +42,59 @@
             </form>
             <video id="uploaded-video" width="640" height="480" controls style="display:none;"></video>
         </div>
-        <div class="predictions" id="predictions">
+        <div class="predictions" id="predictions" style="display:none;">
             <h2>Predictions</h2>
             <ul id="prediction-list"></ul>
         </div>
     </div>
     <script>
-        function showStream() {
-            document.getElementById('video-stream').style.display = 'block';
-            document.getElementById('video-upload').style.display = 'none';
-            document.getElementById('uploaded-video').style.display = 'none';
-        }
+        const showStream = () => {
+            document.querySelector('#selection-page').style.display = 'none';
+            document.querySelector('#video-stream').style.display = 'block';
+            document.querySelector('#predictions').style.display = 'block';
+        };
 
-        function showUpload() {
-            document.getElementById('video-stream').style.display = 'none';
-            document.getElementById('video-upload').style.display = 'block';
-        }
+        const showUpload = () => {
+            document.querySelector('#selection-page').style.display = 'none';
+            document.querySelector('#video-upload').style.display = 'block';
+            document.querySelector('#predictions').style.display = 'block';
+        };
 
-        function fetchPredictions() {
+        const fetchPredictions = () => {
             fetch('/predictions')
                 .then(response => response.json())
                 .then(data => {
-                    const predictionList = document.getElementById('prediction-list');
-                    predictionList.innerHTML = '';
-                    data.predictions.forEach(prediction => {
-                        const listItem = document.createElement('li');
-                        listItem.textContent = prediction;
-                        predictionList.appendChild(listItem);
-                    });
+                    const predictionList = document.querySelector('#prediction-list');
+                    predictionList.innerHTML = data.predictions.map(prediction => `<li>${prediction}</li>`).join('');
                 });
-        }
+        };
 
         setInterval(fetchPredictions, 1000);
 
-        document.getElementById('upload-form').addEventListener('submit', function(e) {
+        document.querySelector('#upload-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData();
-            const fileInput = document.getElementById('video-file');
+            const fileInput = document.querySelector('#video-file');
             formData.append('video-file', fileInput.files[0]);
 
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                const uploadedVideo = document.getElementById('uploaded-video');
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                const uploadedVideo = document.querySelector('#uploaded-video');
                 uploadedVideo.src = URL.createObjectURL(fileInput.files[0]);
                 uploadedVideo.style.display = 'block';
-                fetch('/process_video?filename=' + data.filename);
-            });
+                await fetch('/process_video');
+                console.log('Video processed');
+            } catch (error) {
+                console.error('Error uploading or processing video:', error);
+            }
         });
+
+        document.querySelector('#stream-btn').addEventListener('click', showStream);
+        document.querySelector('#upload-btn').addEventListener('click', showUpload);
     </script>
 </body>
 </html>

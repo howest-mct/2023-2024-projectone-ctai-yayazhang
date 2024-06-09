@@ -69,6 +69,7 @@ def receive_messages(sock, shutdown_flag):
         sock.close()
 
 def process_frame(frame):
+    global predictions
     results = model(frame)
     annotated_frame = frame.copy()
     cat_detected = False
