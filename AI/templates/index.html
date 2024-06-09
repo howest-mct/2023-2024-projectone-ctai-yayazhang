@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cat Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            text-align: center;
+        }
+        .slider {
+            width: 300px;
+        }
+        .video-feed {
+            width: 640px;
+            height: 480px;
+            border: 1px solid #ddd;
+            margin: 10px auto;
+        }
+        .predictions {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Raspberry Pi Cat Detection</h1>
+        <div>
+            <button onclick="showStream()">Stream Video</button>
+            <button onclick="showUpload()">Upload Video</button>
+        </div>
+        <div class="video-feed" id="video-stream">
+            <img id="video" src="/video_feed" alt="Video Feed">
+        </div>
+        <div id="video-upload" style="display:none;">
+            <form id="upload-form" enctype="multipart/form-data">
+                <input type="file" id="video-file" name="video-file" accept="video/*">
+                <button type="submit">Upload</button>
+            </form>
+            <video id="uploaded-video" width="640" height="480" controls style="display:none;"></video>
+        </div>
+        <div class="predictions" id="predictions">
+            <h2>Predictions</h2>
+            <ul id="prediction-list"></ul>
+        </div>
+    </div>
+    <script>
+        function showStream() {
+            document.getElementById('video-stream').style.display = 'block';
+            document.getElementById('video-upload').style.display = 'none';
+            document.getElementById('uploaded-video').style.display = 'none';
+        }
+
+        function showUpload() {
+            document.getElementById('video-stream').style.display = 'none';
+            document.getElementById('video-upload').style.display = 'block';
+        }
+
+        function fetchPredictions() {
+            fetch('/predictions')
+                .then(response => response.json())
+                .then(data => {
+                    const predictionList = document.getElementById('prediction-list');
+                    predictionList.innerHTML = '';
+                    data.predictions.forEach(prediction => {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = prediction;
+                        predictionList.appendChild(listItem);
+                    });
+                });
+        }
+
+        setInterval(fetchPredictions, 1000);
+
+        document.getElementById('upload-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            const fileInput = document.getElementById('video-file');
+            formData.append('video-file', fileInput.files[0]);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const uploadedVideo = document.getElementById('uploaded-video');
+                uploadedVideo.src = URL.createObjectURL(fileInput.files[0]);
+                uploadedVideo.style.display = 'block';
+                fetch('/process_video?filename=' + data.filename);
+            });
+        });
+    </script>
+</body>
+</html>
