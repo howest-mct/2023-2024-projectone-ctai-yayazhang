@@ -13,7 +13,7 @@ client_socket = None
 receive_thread = None
 shutdown_flag = threading.Event()
 
-model = YOLO('AI/model/detect_cat_v9.pt')
+model = YOLO('AI/model/detect_cat_v8.pt')
 conf_threshold = 0.55 
 raspberry_pi_ip = '192.168.168.167'
 
@@ -22,7 +22,7 @@ bbox_colors = {
     'Niuniu': (255, 0, 0) 
 }
 
-app = Flask(__name__, template_folder='templates')
+app = Flask(__name__, template_folder='templates', static_folder='static')
 
 
 annotated_frame = None
