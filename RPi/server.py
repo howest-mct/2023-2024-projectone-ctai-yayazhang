@@ -16,12 +16,12 @@ camera.set(cv2.CAP_PROP_FPS, 30)
 SERVO_PIN = 18
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SERVO_PIN, GPIO.OUT)
-servo = GPIO.PWM(SERVO_PIN, 50)  # 50Hz frequency
+servo = GPIO.PWM(SERVO_PIN, 50) 
 servo.start(0)
 
 app = Flask(__name__)
 
-# Global vars for use in methods/threads
+# Global vars 
 client_socket = None
 server_socket = None
 server_thread = None
@@ -95,7 +95,7 @@ def accept_connections(shutdown_flag):
 def handle_client(sock, shutdown_flag):
     try:
         while not shutdown_flag.is_set():
-            data = sock.recv(512)  # Use an even smaller buffer size to reduce latency
+            data = sock.recv(512) 
             if not data:
                 break
             message = data.decode(errors='ignore')

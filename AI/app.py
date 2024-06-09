@@ -7,24 +7,24 @@ import requests
 from flask import Flask, render_template, Response, jsonify, request
 from ultralytics import YOLO
 
-server_address = ('192.168.168.167', 8500)  # Raspberry Pi IP and port
+server_address = ('192.168.168.167', 8500)
 
 client_socket = None
 receive_thread = None
 shutdown_flag = threading.Event()
 
-model = YOLO('AI/model/detect_cat_v8.pt')
-conf_threshold = 0.55  # Updated confidence threshold
-raspberry_pi_ip = '192.168.168.167'  # Raspberry Pi IP address
+model = YOLO('AI/model/detect_cat_v9.pt')
+conf_threshold = 0.55 
+raspberry_pi_ip = '192.168.168.167'
 
 bbox_colors = {
-    'Orange': (0, 255, 0),  # Green for Orange
-    'Niuniu': (255, 0, 0)  # Red for Niuniu
+    'Orange': (0, 255, 0), 
+    'Niuniu': (255, 0, 0) 
 }
 
 app = Flask(__name__, template_folder='templates')
 
-# Global variable to store annotated frame and predictions
+
 annotated_frame = None
 predictions = []
 current_cat = None
@@ -45,7 +45,7 @@ def receive_messages(sock, shutdown_flag):
     try:
         while not shutdown_flag.is_set():
             try:
-                packet = sock.recv(1024)  # Use a smaller buffer size to reduce latency
+                packet = sock.recv(1024)
                 if not packet:
                     break
                 data += packet
@@ -67,7 +67,7 @@ def receive_messages(sock, shutdown_flag):
         sock.close()
 
 def process_frame(frame):
-    global current_cat
+    global current_cat, conf_threshold
     results = model(frame)
     annotated_frame = frame.copy()
     predictions = []
@@ -78,11 +78,12 @@ def process_frame(frame):
             if score >= conf_threshold:
                 label = model.names[int(class_id)]
                 predictions.append(f"{label}: {score:.2f}")
-                color = bbox_colors.get(label, (255, 255, 255))  # Default to white if label not found
+                color = bbox_colors.get(label, (255, 255, 255))  
+
                 cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
                 cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
-                if score >= 0.55:
+                if score >= conf_threshold:
                     if current_cat != label:
                         send_command(f"cat_{label.lower()}")
                         current_cat = label
@@ -109,7 +110,7 @@ def video_feed():
                 frame = buffer.tobytes()
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            time.sleep(0.05)  # Reduce the sleep time to increase frame rate
+            time.sleep(0.05) 
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/predictions')
@@ -124,11 +125,11 @@ def upload_video():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
     file.save('uploads/' + file.filename)
-    return jsonify({'success': 'File uploaded successfully'}), 200
+    return jsonify({'success': 'File uploaded successfully', 'filename': file.filename}), 200
 
 @app.route('/process_video', methods=['POST'])
 def process_uploaded_video():
-    video_path = 'uploads/' + request.files['video-file'].filename
+    video_path = 'uploads/' + request.json['filename']
     cap = cv2.VideoCapture(video_path)
     global annotated_frame, predictions
 
@@ -140,6 +141,13 @@ def process_uploaded_video():
 
     cap.release()
     return jsonify({'success': 'Video processed successfully'}), 200
+
+@app.route('/set_threshold', methods=['POST'])
+def set_threshold():
+    global conf_threshold
+    data = request.get_json()
+    conf_threshold = float(data.get('threshold', 0.55))
+    return jsonify({'success': True, 'threshold': conf_threshold}), 200
 
 def main():
     global client_socket, receive_thread

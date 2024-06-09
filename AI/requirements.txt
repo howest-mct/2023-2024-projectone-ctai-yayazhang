@@ -91,3 +91,4 @@ streamlit==1.35.0
 ultralytics
 opencv-python==4.9.0.80
 opencv-python-headless==4.8.0.74
+Flask==3.0.3
