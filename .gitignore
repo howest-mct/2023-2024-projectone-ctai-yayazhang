@@ -191,6 +191,7 @@ azure_config.json
 
 # model ignore
 /AI/model/detect_cat_v8.pt
+/AI/model/detect_cat_v9.pt
 
 # config ignore
 /AI/notebooks/config.json
