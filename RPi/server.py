@@ -8,25 +8,30 @@ from RPi import GPIO
 # Initialize the camera
 camera = cv2.VideoCapture(0)
 
+# Set lower latency settings if available
+camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+camera.set(cv2.CAP_PROP_FPS, 30)
+
 # GPIO setup for the servo motor
 SERVO_PIN = 18
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SERVO_PIN, GPIO.OUT)
-servo = GPIO.PWM(SERVO_PIN, 50)
+servo = GPIO.PWM(SERVO_PIN, 50) 
 servo.start(0)
 
 app = Flask(__name__)
 
-# Global vars for use in methods/threads
+# Global vars 
 client_socket = None
 server_socket = None
 server_thread = None
 shutdown_flag = threading.Event()
 
 def set_servo_angle(angle):
-    duty = angle / 18 + 2
+    # Map angle to duty cycle
+    duty_cycle = 2.5 + (angle / 180.0) * 10.0
     GPIO.output(SERVO_PIN, True)
-    servo.ChangeDutyCycle(duty)
+    servo.ChangeDutyCycle(duty_cycle)
     time.sleep(1)
     GPIO.output(SERVO_PIN, False)
     servo.ChangeDutyCycle(0)
@@ -90,7 +95,7 @@ def accept_connections(shutdown_flag):
 def handle_client(sock, shutdown_flag):
     try:
         while not shutdown_flag.is_set():
-            data = sock.recv(1024)
+            data = sock.recv(512) 
             if not data:
                 break
             message = data.decode(errors='ignore')
