@@ -21,7 +21,7 @@
 
 # Python project
 config.py
-*.css
+
 *.css.map
 
 # Byte-compiled / optimized / DLL files
@@ -191,6 +191,7 @@ azure_config.json
 
 # model ignore
 /AI/model/detect_cat_v8.pt
+/AI/model/detect_cat_v9.pt
 
 # config ignore
 /AI/notebooks/config.json
