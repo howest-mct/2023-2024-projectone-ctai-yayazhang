@@ -112,3 +112,22 @@ This is the feedback on my questions.
 Feedback 1: 
   > the pi is not correct connect to the project kit, after Tijn help with pushing connect gpio ping, its all work
 
+## Conversation 4 (Date: 10/06/2024)
+
+Lecturer: Christophe
+
+Questions for this conversation:
+
+- [x] Question 1: 
+> Do i need to work with project board
+
+- [x] Question 2: 
+> How do i minimize the delay from python logic side
+
+This is the feedback on my questions.
+
+Feedback 1: 
+  > It is not mandatory to use project board
+
+Feedback 2:
+> can have another if logic within open the door for 15 sec to have the door more friendly last longer open since the delay quite affect the result
