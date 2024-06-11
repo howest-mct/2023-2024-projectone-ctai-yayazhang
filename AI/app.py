@@ -24,10 +24,11 @@ bbox_colors = {
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
-
 annotated_frame = None
 predictions = []
 current_cat = None
+last_detection_time = 0 
+door_open = False 
 
 def setup_socket_client():
     global client_socket, receive_thread
@@ -67,10 +68,12 @@ def receive_messages(sock, shutdown_flag):
         sock.close()
 
 def process_frame(frame):
-    global current_cat, conf_threshold
+    global current_cat, conf_threshold, last_detection_time, door_open
     results = model(frame)
     annotated_frame = frame.copy()
     predictions = []
+
+    detected = False
 
     for result in results:
         for bbox in result.boxes.data:
@@ -83,13 +86,16 @@ def process_frame(frame):
                 cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
                 cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
-                if score >= conf_threshold:
-                    if current_cat != label:
-                        send_command(f"cat_{label.lower()}")
-                        current_cat = label
+                detected = True
+                if not door_open:
+                    send_command(f"cat_{label.lower()}")
+                    current_cat = label
+                    door_open = True
+                    last_detection_time = time.time()
 
-    if current_cat and not any(label in p for p in predictions):
+    if door_open and (time.time() - last_detection_time > 15):
         send_command('close')
+        door_open = False
         current_cat = None
 
     return annotated_frame, predictions
