@@ -39,6 +39,58 @@ def setup_socket_client():
     receive_thread = threading.Thread(target=receive_messages, args=(client_socket, shutdown_flag))
     receive_thread.start()
 
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/video_feed')
+def video_feed():
+    def generate():
+        while True:
+            if annotated_frame is not None:
+                _, buffer = cv2.imencode('.jpg', annotated_frame)
+                frame = buffer.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            time.sleep(0.05) 
+    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/predictions')
+def get_predictions():
+    return jsonify(predictions=predictions)
+
+@app.route('/upload', methods=['POST'])
+def upload_video():
+    if 'video-file' not in request.files:
+        return jsonify({'error': 'No video file part'}), 400
+    file = request.files['video-file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    file.save('uploads/' + file.filename)
+    return jsonify({'success': 'File uploaded successfully', 'filename': file.filename}), 200
+
+@app.route('/process_video', methods=['POST'])
+def process_uploaded_video():
+    video_path = 'uploads/' + request.json['filename']
+    cap = cv2.VideoCapture(video_path)
+    global annotated_frame, predictions
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        annotated_frame, predictions = process_frame(frame)
+
+    cap.release()
+    return jsonify({'success': 'Video processed successfully'}), 200
+
+@app.route('/set_threshold', methods=['POST'])
+def set_threshold():
+    global conf_threshold
+    data = request.get_json()
+    conf_threshold = float(data.get('threshold', 0.55))
+    return jsonify({'success': True, 'threshold': conf_threshold}), 200
+
 def receive_messages(sock, shutdown_flag):
     global annotated_frame, predictions
     sock.settimeout(1)
@@ -102,58 +154,6 @@ def process_frame(frame):
 
 def send_command(command):
     requests.post(f'http://{raspberry_pi_ip}:5000/command', json={'command': command})
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/video_feed')
-def video_feed():
-    def generate():
-        while True:
-            if annotated_frame is not None:
-                _, buffer = cv2.imencode('.jpg', annotated_frame)
-                frame = buffer.tobytes()
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            time.sleep(0.05) 
-    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/predictions')
-def get_predictions():
-    return jsonify(predictions=predictions)
-
-@app.route('/upload', methods=['POST'])
-def upload_video():
-    if 'video-file' not in request.files:
-        return jsonify({'error': 'No video file part'}), 400
-    file = request.files['video-file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    file.save('uploads/' + file.filename)
-    return jsonify({'success': 'File uploaded successfully', 'filename': file.filename}), 200
-
-@app.route('/process_video', methods=['POST'])
-def process_uploaded_video():
-    video_path = 'uploads/' + request.json['filename']
-    cap = cv2.VideoCapture(video_path)
-    global annotated_frame, predictions
-
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        annotated_frame, predictions = process_frame(frame)
-
-    cap.release()
-    return jsonify({'success': 'Video processed successfully'}), 200
-
-@app.route('/set_threshold', methods=['POST'])
-def set_threshold():
-    global conf_threshold
-    data = request.get_json()
-    conf_threshold = float(data.get('threshold', 0.55))
-    return jsonify({'success': True, 'threshold': conf_threshold}), 200
 
 def main():
     global client_socket, receive_thread
