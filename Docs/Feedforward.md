@@ -131,3 +131,17 @@ Feedback 1:
 
 Feedback 2:
 > can have another if logic within open the door for 15 sec to have the door more friendly last longer open since the delay quite affect the result
+
+
+## Feedforward Conversation MVP03 (Date: 11/06/2024)
+
+Feedback for MVP02
+
+Feedback 1: 
+  > still has delay of the camera when connect to the rapi, should find a way to improve that
+
+Feedback 2:
+  > maker part should finish as soon as possible
+
+Feedback 3:
+  > instructable should add some images in
