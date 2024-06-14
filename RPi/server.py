@@ -12,12 +12,37 @@ camera = cv2.VideoCapture(0)
 camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 camera.set(cv2.CAP_PROP_FPS, 30)
 
-# GPIO setup for the servo motor
-SERVO_PIN = 18
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(SERVO_PIN, GPIO.OUT)
-servo = GPIO.PWM(SERVO_PIN, 50) 
-servo.start(0)
+# GPIO setup for the stepper motor
+GPIO.setmode(GPIO.BCM)  # Set the GPIO mode
+control_pins = [19, 13, 6, 5]
+for pin in control_pins:
+    GPIO.setup(pin, GPIO.OUT)
+    GPIO.output(pin, 0)
+
+# Stepper motor step sequence
+step_sequence = [
+    [1, 0, 0, 0],
+    [1, 1, 0, 0],
+    [0, 1, 0, 0],
+    [0, 1, 1, 0],
+    [0, 0, 1, 0],
+    [0, 0, 1, 1],
+    [0, 0, 0, 1],
+    [1, 0, 0, 1]
+]
+
+def rotate_stepper(steps, delay=0.001, direction='clockwise'):
+    if direction == 'counterclockwise':
+        step_sequence.reverse()
+
+    for _ in range(abs(steps)):
+        for step in step_sequence:
+            for pin in range(4):
+                GPIO.output(control_pins[pin], step[pin])
+            time.sleep(delay)
+
+    if direction == 'counterclockwise':
+        step_sequence.reverse()  # Reset sequence to original
 
 # GPIO setup for LEDs
 LED_RED = 5
@@ -25,7 +50,7 @@ LED_GREEN = 6
 LED_BLUE = 13
 GPIO.setup(LED_RED, GPIO.OUT)
 GPIO.setup(LED_BLUE, GPIO.OUT)
-GPIO.setup(LED_GREEN,GPIO.OUT)
+GPIO.setup(LED_GREEN, GPIO.OUT)
 
 GPIO.output(LED_GREEN, True)
 
@@ -37,15 +62,27 @@ server_socket = None
 server_thread = None
 shutdown_flag = threading.Event()
 
-def set_servo_angle(angle):
-    # Map angle to duty cycle
-    duty_cycle = 2.5 + (angle / 180.0) * 10.0
-    GPIO.output(SERVO_PIN, True)
-    servo.ChangeDutyCycle(duty_cycle)
-    time.sleep(1)
-    GPIO.output(SERVO_PIN, False)
-    servo.ChangeDutyCycle(0)
-    print(f"Servo moved to {angle} degrees")
+current_position = 'center'
+
+def set_stepper_position(position):
+    global current_position
+
+    if position == 'cat_orange' and current_position != 'right':
+        if current_position == 'left':
+            rotate_stepper(256, direction='clockwise')  # Move from left to center
+        rotate_stepper(256, direction='clockwise')  # Move from center to right
+        current_position = 'right'
+    elif position == 'cat_niuniu' and current_position != 'left':
+        if current_position == 'right':
+            rotate_stepper(256, direction='counterclockwise')  # Move from right to center
+        rotate_stepper(256, direction='counterclockwise')  # Move from center to left
+        current_position = 'left'
+    elif position == 'close' and current_position != 'center':
+        if current_position == 'right':
+            rotate_stepper(256, direction='counterclockwise')  # Move from right to center
+        elif current_position == 'left':
+            rotate_stepper(256, direction='clockwise')  # Move from left to center
+        current_position = 'center'
 
 def turn_led_red():
     GPIO.output(LED_GREEN, False)
@@ -80,13 +117,13 @@ def command():
     print(f"Received command: {command}")
 
     if command == 'cat_orange':
-        set_servo_angle(120)
+        set_stepper_position('cat_orange')
         current_state = 'cat orange'
     elif command == 'cat_niuniu':
-        set_servo_angle(0)
+        set_stepper_position('cat_niuniu')
         current_state = 'cat niuniu'
     elif command == 'close':
-        set_servo_angle(60)
+        set_stepper_position('close')
         current_state = 'close'
     return '', 204
 
@@ -123,11 +160,11 @@ def handle_client(sock, shutdown_flag):
             if message == 'start_video':
                 send_video(sock)
             elif message == 'cat_orange':
-                set_servo_angle(120)
+                set_stepper_position('cat_orange')
             elif message == 'cat_niuniu':
-                set_servo_angle(0)
+                set_stepper_position('cat_niuniu')
             elif message == 'close':
-                set_servo_angle(60)
+                set_stepper_position('close')
     except socket.timeout:
         pass
     except Exception as e:
@@ -158,5 +195,4 @@ except KeyboardInterrupt:
 finally:
     server_thread.join()
     server_socket.close()
-    servo.stop()
     GPIO.cleanup()
