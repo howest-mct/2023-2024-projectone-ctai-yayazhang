@@ -1,6 +1,7 @@
 document.querySelector('#stream-btn').addEventListener('click', () => {
     document.querySelector('#selection-page').style.display = 'none';
     document.querySelector('#video-stream').style.display = 'block';
+    document.querySelector('#video').src = "/video_feed"; // Set the source of the video feed
 });
 
 document.querySelector('#upload-btn').addEventListener('click', () => {
