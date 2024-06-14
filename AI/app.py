@@ -1,95 +1,46 @@
-import socket
 import threading
+import time
+import socket
 import cv2
 import numpy as np
-import time
 import requests
-from flask import Flask, render_template, Response, jsonify, request
+import streamlit as st
 from ultralytics import YOLO
 
+# Initialize constants and configurations
 server_address = ('192.168.168.167', 8500)
+model = YOLO('AI/model/detect_cat_v9.pt')
+conf_threshold = 0.55
+raspberry_pi_ip = '192.168.168.167'
+bbox_colors = {'Orange': (0, 255, 0), 'Niuniu': (255, 0, 0)}
 
+#  global variables
 client_socket = None
 receive_thread = None
 shutdown_flag = threading.Event()
-
-model = YOLO('AI/model/detect_cat_v8.pt')
-conf_threshold = 0.55 
-raspberry_pi_ip = '192.168.168.167'
-
-bbox_colors = {
-    'Orange': (0, 255, 0), 
-    'Niuniu': (255, 0, 0) 
-}
-
-app = Flask(__name__, template_folder='templates', static_folder='static')
-
 annotated_frame = None
 predictions = []
 current_cat = None
-last_detection_time = 0 
-door_open = False 
+last_detection_time = 0
+door_open = False
+stop_stream_flag = threading.Event()
 
 def setup_socket_client():
     global client_socket, receive_thread
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect(server_address)
-    print("Connected to server")
-
     receive_thread = threading.Thread(target=receive_messages, args=(client_socket, shutdown_flag))
     receive_thread.start()
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/video_feed')
-def video_feed():
-    def generate():
-        while True:
-            if annotated_frame is not None:
-                _, buffer = cv2.imencode('.jpg', annotated_frame)
-                frame = buffer.tobytes()
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            time.sleep(0.05) 
-    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/predictions')
-def get_predictions():
-    return jsonify(predictions=predictions)
-
-@app.route('/upload', methods=['POST'])
-def upload_video():
-    if 'video-file' not in request.files:
-        return jsonify({'error': 'No video file part'}), 400
-    file = request.files['video-file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    file.save('uploads/' + file.filename)
-    return jsonify({'success': 'File uploaded successfully', 'filename': file.filename}), 200
-
-@app.route('/process_video', methods=['POST'])
-def process_uploaded_video():
-    video_path = 'uploads/' + request.json['filename']
-    cap = cv2.VideoCapture(video_path)
-    global annotated_frame, predictions
-
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        annotated_frame, predictions = process_frame(frame)
-
-    cap.release()
-    return jsonify({'success': 'Video processed successfully'}), 200
-
-@app.route('/set_threshold', methods=['POST'])
-def set_threshold():
-    global conf_threshold
-    data = request.get_json()
-    conf_threshold = float(data.get('threshold', 0.55))
-    return jsonify({'success': True, 'threshold': conf_threshold}), 200
+def close_socket_client():
+    global client_socket, shutdown_flag, receive_thread
+    shutdown_flag.set()
+    if client_socket:
+        client_socket.close()
+    if receive_thread:
+        receive_thread.join()
+    client_socket = None
+    shutdown_flag.clear()
 
 def receive_messages(sock, shutdown_flag):
     global annotated_frame, predictions
@@ -102,9 +53,7 @@ def receive_messages(sock, shutdown_flag):
                 if not packet:
                     break
                 data += packet
-
                 frames = data.split(b"END_FRAME")
-
                 for frame in frames[:-1]:
                     np_arr = np.frombuffer(frame, np.uint8)
                     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
@@ -124,55 +73,133 @@ def process_frame(frame):
     results = model(frame)
     annotated_frame = frame.copy()
     predictions = []
-
     detected = False
-
     for result in results:
         for bbox in result.boxes.data:
             x1, y1, x2, y2, score, class_id = bbox
             if score >= conf_threshold:
                 label = model.names[int(class_id)]
                 predictions.append(f"{label}: {score:.2f}")
-                color = bbox_colors.get(label, (255, 255, 255))  
-
+                color = bbox_colors.get(label, (255, 255, 255))
                 cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
                 cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-
                 detected = True
                 if not door_open:
                     send_command(f"cat_{label.lower()}")
                     current_cat = label
                     door_open = True
                     last_detection_time = time.time()
-
     if door_open and (time.time() - last_detection_time > 15):
         send_command('close')
         door_open = False
         current_cat = None
-
     return annotated_frame, predictions
 
 def send_command(command):
     requests.post(f'http://{raspberry_pi_ip}:5000/command', json={'command': command})
 
-def main():
-    global client_socket, receive_thread
+# Initialize Streamlit session state
+if 'stream_started' not in st.session_state:
+    st.session_state.stream_started = False
+if 'predictions' not in st.session_state:
+    st.session_state.predictions = "None"
+if 'door_state' not in st.session_state:
+    st.session_state.door_state = "Closed"
+
+def start_laptop_camera_stream(image_placeholder, info_placeholder, door_state_placeholder):
+    st.session_state.stream_started = True
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        st.error("Error: Could not open video stream from laptop camera.")
+        return
+    while st.session_state.stream_started:
+        ret, frame = cap.read()
+        if not ret:
+            st.error("Error: Could not read frame from laptop camera.")
+            break
+        annotated_frame, predictions = process_frame(frame)
+        image_placeholder.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB), channels="RGB")
+        st.session_state.predictions = predictions
+        st.session_state.door_state = f"Food Door: {'Open for ' + current_cat if door_open else 'Closed'}"
+        info_placeholder.text(f"Predictions: {st.session_state.predictions}")
+        door_state_placeholder.text(st.session_state.door_state)
+        time.sleep(0.1)
+    cap.release()
+
+def start_rpi_camera_stream(image_placeholder, info_placeholder, door_state_placeholder):
+    st.session_state.stream_started = True
     setup_socket_client()
     client_socket.sendall('start_video'.encode())
+    while st.session_state.stream_started:
+        if annotated_frame is not None:
+            image_placeholder.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB), channels="RGB")
+            st.session_state.predictions = predictions
+            st.session_state.door_state = f"Food Door: {'Open for ' + current_cat if door_open else 'Closed'}"
+            info_placeholder.text(f"Predictions: {st.session_state.predictions}")
+            door_state_placeholder.text(st.session_state.door_state)
+        time.sleep(0.1)
+    if client_socket:
+        client_socket.sendall('stop_video'.encode())
+    close_socket_client()
 
-    flask_thread = threading.Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': 5000})
-    flask_thread.start()
+def process_uploaded_video(video_path, image_placeholder, info_placeholder, door_state_placeholder):
+    st.session_state.stream_started = True
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        st.error("Error: Could not open uploaded video file.")
+        return
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        annotated_frame, predictions = process_frame(frame)
+        image_placeholder.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB), channels="RGB")
+        st.session_state.predictions = predictions
+        st.session_state.door_state = f"Food Door: {'Open for ' + current_cat if door_open else 'Closed'}"
+        info_placeholder.text(f"Predictions: {st.session_state.predictions}")
+        door_state_placeholder.text(st.session_state.door_state)
+    cap.release()
+    st.sidebar.success("Video processed successfully")
 
-    try:
-        while True:
-            time.sleep(10)
-    except KeyboardInterrupt:
-        print("Client disconnecting...")
-        shutdown_flag.set()
-    finally:
-        client_socket.close()
-        receive_thread.join()
-        print("Client stopped gracefully")
+def main():
+    global conf_threshold
+
+    # Center the title
+    st.markdown("<h1 style='text-align: center;'>Cat Detection and Control System</h1>", unsafe_allow_html=True)
+
+    # Slider for confidence threshold under the title
+    threshold = st.slider('Confidence Threshold', min_value=0.0, max_value=1.0, value=conf_threshold, key="confidence_threshold")
+    if threshold != conf_threshold:
+        conf_threshold = threshold
+
+    # Default placeholders for detection results
+    st.write("### Detection Results")
+    image_placeholder = st.empty()
+    info_placeholder = st.empty()
+    door_state_placeholder = st.empty()
+    
+    info_placeholder.text(f"Predictions: {st.session_state.predictions}")
+    door_state_placeholder.text(st.session_state.door_state)
+
+    # Sidebar options as buttons
+    selected_option = st.sidebar.radio("Select Input Source", ["Laptop Camera", "Raspberry Pi Camera", "Upload Video"])
+
+    if selected_option == "Laptop Camera" and not st.session_state.stream_started:
+        st.sidebar.button('Start Laptop Camera Stream', on_click=lambda: start_laptop_camera_stream(image_placeholder, info_placeholder, door_state_placeholder), key="start_laptop")
+        st.sidebar.button('Stop Video Stream', on_click=lambda: st.session_state.update(stream_started=False), key="stop_laptop")
+
+    if selected_option == "Raspberry Pi Camera" and not st.session_state.stream_started:
+        st.sidebar.button('Start Raspberry Pi Camera Stream', on_click=lambda: start_rpi_camera_stream(image_placeholder, info_placeholder, door_state_placeholder), key="start_rpi")
+        st.sidebar.button('Stop Video Stream', on_click=lambda: st.session_state.update(stream_started=False), key="stop_rpi")
+
+    if selected_option == "Upload Video":
+        uploaded_file = st.sidebar.file_uploader("Upload Video", key="upload_video")
+        if uploaded_file is not None:
+            video_path = 'uploads/' + uploaded_file.name
+            with open(video_path, 'wb') as f:
+                f.write(uploaded_file.read())
+            st.sidebar.success("File uploaded successfully")
+            st.sidebar.button('Process Uploaded Video', on_click=lambda: process_uploaded_video(video_path, image_placeholder, info_placeholder, door_state_placeholder), key="process_upload")
 
 if __name__ == "__main__":
     main()
