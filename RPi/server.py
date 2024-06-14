@@ -19,6 +19,16 @@ GPIO.setup(SERVO_PIN, GPIO.OUT)
 servo = GPIO.PWM(SERVO_PIN, 50) 
 servo.start(0)
 
+# GPIO setup for LEDs
+LED_RED = 5
+LED_GREEN = 6
+LED_BLUE = 13
+GPIO.setup(LED_RED, GPIO.OUT)
+GPIO.setup(LED_BLUE, GPIO.OUT)
+GPIO.setup(LED_GREEN,GPIO.OUT)
+
+GPIO.output(LED_GREEN, True)
+
 app = Flask(__name__)
 
 # Global vars 
@@ -36,6 +46,16 @@ def set_servo_angle(angle):
     GPIO.output(SERVO_PIN, False)
     servo.ChangeDutyCycle(0)
     print(f"Servo moved to {angle} degrees")
+
+def turn_led_red():
+    GPIO.output(LED_GREEN, False)
+    GPIO.output(LED_RED, True)
+    print("LED turned red")
+
+def turn_led_green():
+    GPIO.output(LED_RED, False)
+    GPIO.output(LED_GREEN, True)
+    print("LED turned green")
 
 @app.route('/video_feed')
 def video_feed():
