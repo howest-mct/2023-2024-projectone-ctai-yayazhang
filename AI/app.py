@@ -14,7 +14,7 @@ conf_threshold = 0.55
 raspberry_pi_ip = '192.168.168.167'
 bbox_colors = {'Orange': (0, 255, 0), 'Niuniu': (255, 0, 0)}
 
-#  global variables
+# Initialize global variables
 client_socket = None
 receive_thread = None
 shutdown_flag = threading.Event()
@@ -84,7 +84,7 @@ def process_frame(frame):
                 cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
                 cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
                 detected = True
-                if not door_open:
+                if not door_open or current_cat != label:
                     send_command(f"cat_{label.lower()}")
                     current_cat = label
                     door_open = True
