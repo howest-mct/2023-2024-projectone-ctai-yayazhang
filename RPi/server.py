@@ -8,16 +8,22 @@ from RPi import GPIO
 # Initialize the camera
 camera = cv2.VideoCapture(0)
 
-# Set lower latency settings if available
+# Set lower latency
 camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 camera.set(cv2.CAP_PROP_FPS, 30)
 
 # GPIO setup for the stepper motor
-GPIO.setmode(GPIO.BCM)  # Set the GPIO mode
+GPIO.setmode(GPIO.BCM)
 control_pins = [19, 13, 6, 5]
+LED_GREEN = 18
+LED_RED = 23
+
 for pin in control_pins:
     GPIO.setup(pin, GPIO.OUT)
     GPIO.output(pin, 0)
+
+GPIO.setup(LED_GREEN, GPIO.OUT)
+GPIO.setup(LED_RED, GPIO.OUT)
 
 # Stepper motor step sequence
 step_sequence = [
@@ -32,72 +38,55 @@ step_sequence = [
 ]
 
 def rotate_stepper(steps, delay=0.001, direction='clockwise'):
-    if direction == 'counterclockwise':
-        step_sequence.reverse()
-
+    sequence = step_sequence if direction == 'clockwise' else step_sequence[::-1]
     for _ in range(abs(steps)):
-        for step in step_sequence:
+        for step in sequence:
             for pin in range(4):
                 GPIO.output(control_pins[pin], step[pin])
             time.sleep(delay)
-
-    if direction == 'counterclockwise':
-        step_sequence.reverse()  # Reset sequence to original
-
-# GPIO setup for LEDs
-LED_RED = 5
-LED_GREEN = 6
-LED_BLUE = 13
-GPIO.setup(LED_RED, GPIO.OUT)
-GPIO.setup(LED_BLUE, GPIO.OUT)
-GPIO.setup(LED_GREEN, GPIO.OUT)
-
-GPIO.output(LED_GREEN, True)
-
-app = Flask(__name__)
-
-# Global vars 
-client_socket = None
-server_socket = None
-server_thread = None
-shutdown_flag = threading.Event()
 
 current_position = 'center'
 
 def set_stepper_position(position):
     global current_position
-
-    if position == 'cat_orange' and current_position != 'right':
-        if current_position == 'left':
-            rotate_stepper(256, direction='clockwise')  # Move from left to center
-        rotate_stepper(256, direction='clockwise')  # Move from center to right
-        current_position = 'right'
-    elif position == 'cat_niuniu' and current_position != 'left':
+    if position == 'cat_orange' and current_position != 'left':
         if current_position == 'right':
-            rotate_stepper(256, direction='counterclockwise')  # Move from right to center
-        rotate_stepper(256, direction='counterclockwise')  # Move from center to left
+            rotate_stepper(128, direction='counterclockwise')
+        rotate_stepper(128, direction='counterclockwise')
         current_position = 'left'
+    elif position == 'cat_niuniu' and current_position != 'right':
+        if current_position == 'left':
+            rotate_stepper(128, direction='clockwise')
+        rotate_stepper(128, direction='clockwise')
+        current_position = 'right'
     elif position == 'close' and current_position != 'center':
         if current_position == 'right':
-            rotate_stepper(256, direction='counterclockwise')  # Move from right to center
+            rotate_stepper(128, direction='counterclockwise')
         elif current_position == 'left':
-            rotate_stepper(256, direction='clockwise')  # Move from left to center
+            rotate_stepper(128, direction='clockwise')
         current_position = 'center'
 
 def turn_led_red():
     GPIO.output(LED_GREEN, False)
     GPIO.output(LED_RED, True)
-    print("LED turned red")
 
 def turn_led_green():
     GPIO.output(LED_RED, False)
     GPIO.output(LED_GREEN, True)
-    print("LED turned green")
+
+app = Flask(__name__)
+
+# Global vars
+client_socket = None
+server_socket = None
+server_thread = None
+shutdown_flag = threading.Event()
+streaming_flag = threading.Event()
 
 @app.route('/video_feed')
 def video_feed():
     def generate_frames():
-        while True:
+        while streaming_flag.is_set():
             success, frame = camera.read()
             if not success:
                 break
@@ -111,20 +100,19 @@ def video_feed():
 
 @app.route('/command', methods=['POST'])
 def command():
-    global current_state
     data = request.json
     command = data.get('command')
     print(f"Received command: {command}")
 
     if command == 'cat_orange':
         set_stepper_position('cat_orange')
-        current_state = 'cat orange'
+        turn_led_green()
     elif command == 'cat_niuniu':
         set_stepper_position('cat_niuniu')
-        current_state = 'cat niuniu'
+        turn_led_green()
     elif command == 'close':
         set_stepper_position('close')
-        current_state = 'close'
+        turn_led_red()
     return '', 204
 
 def setup_socket_server():
@@ -152,13 +140,16 @@ def accept_connections(shutdown_flag):
 def handle_client(sock, shutdown_flag):
     try:
         while not shutdown_flag.is_set():
-            data = sock.recv(512) 
+            data = sock.recv(512)
             if not data:
                 break
             message = data.decode(errors='ignore')
             print(f"Received from client: {message}")
             if message == 'start_video':
+                streaming_flag.set()
                 send_video(sock)
+            elif message == 'stop_video':
+                streaming_flag.clear()
             elif message == 'cat_orange':
                 set_stepper_position('cat_orange')
             elif message == 'cat_niuniu':
@@ -174,7 +165,7 @@ def handle_client(sock, shutdown_flag):
 
 def send_video(sock):
     try:
-        while True:
+        while streaming_flag.is_set():
             ret, frame = camera.read()
             if not ret:
                 break
