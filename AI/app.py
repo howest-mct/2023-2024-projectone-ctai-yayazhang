@@ -7,14 +7,14 @@ import requests
 import streamlit as st
 from ultralytics import YOLO
 
-# Initialize constants and configurations
+# Initialize configurations
 server_address = ('192.168.168.167', 8500)
 model = YOLO('AI/model/detect_cat_v9.pt')
 conf_threshold = 0.55
 raspberry_pi_ip = '192.168.168.167'
 bbox_colors = {'Orange': (0, 255, 0), 'Niuniu': (255, 0, 0)}
 
-# Initialize global variables
+# global variables
 client_socket = None
 receive_thread = None
 shutdown_flag = threading.Event()
@@ -24,6 +24,9 @@ current_cat = None
 last_detection_time = 0
 door_open = False
 stop_stream_flag = threading.Event()
+cat_detection_queue = []
+
+door_state_lock = threading.Lock()
 
 def setup_socket_client():
     global client_socket, receive_thread
@@ -69,11 +72,12 @@ def receive_messages(sock, shutdown_flag):
         sock.close()
 
 def process_frame(frame):
-    global current_cat, conf_threshold, last_detection_time, door_open
+    global current_cat, conf_threshold, last_detection_time, door_open, cat_detection_queue
     results = model(frame)
     annotated_frame = frame.copy()
     predictions = []
     detected = False
+    current_time = time.time()
     for result in results:
         for bbox in result.boxes.data:
             x1, y1, x2, y2, score, class_id = bbox
@@ -84,16 +88,29 @@ def process_frame(frame):
                 cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
                 cv2.putText(annotated_frame, f"{label} {score:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
                 detected = True
-                if not door_open or current_cat != label:
-                    send_command(f"cat_{label.lower()}")
-                    current_cat = label
+                cat_detection_queue.append((label, current_time))
+
+    # Filter out old detections
+    cat_detection_queue = [cat for cat in cat_detection_queue if current_time - cat[1] <= 2]
+
+    if detected:
+        with door_state_lock:
+            if not door_open and cat_detection_queue:
+                first_detected_cat = cat_detection_queue[0][0]
+                if current_cat != first_detected_cat:
+                    send_command(f"cat_{first_detected_cat.lower()}")
+                    current_cat = first_detected_cat
+                    last_detection_time = current_time
                     door_open = True
-                    last_detection_time = time.time()
-    if door_open and (time.time() - last_detection_time > 15):
+                    threading.Timer(2.0, lambda: close_door()).start()
+    return annotated_frame, predictions
+
+def close_door():
+    global door_open, current_cat, cat_detection_queue
+    with door_state_lock:
         send_command('close')
         door_open = False
-        current_cat = None
-    return annotated_frame, predictions
+        # Do not reset current_cat to allow for new detection logic
 
 def send_command(command):
     requests.post(f'http://{raspberry_pi_ip}:5000/command', json={'command': command})
@@ -120,7 +137,7 @@ def start_laptop_camera_stream(image_placeholder, info_placeholder, door_state_p
         annotated_frame, predictions = process_frame(frame)
         image_placeholder.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB), channels="RGB")
         st.session_state.predictions = predictions
-        st.session_state.door_state = f"Food Door: {'Open for ' + current_cat if door_open else 'Closed'}"
+        st.session_state.door_state = f"Food Door: {'Open for ' + (current_cat if current_cat else '') if door_open else 'Closed'}"
         info_placeholder.text(f"Predictions: {st.session_state.predictions}")
         door_state_placeholder.text(st.session_state.door_state)
         time.sleep(0.1)
@@ -134,7 +151,7 @@ def start_rpi_camera_stream(image_placeholder, info_placeholder, door_state_plac
         if annotated_frame is not None:
             image_placeholder.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB), channels="RGB")
             st.session_state.predictions = predictions
-            st.session_state.door_state = f"Food Door: {'Open for ' + current_cat if door_open else 'Closed'}"
+            st.session_state.door_state = f"Food Door: {'Open for ' + (current_cat if current_cat else '') if door_open else 'Closed'}"
             info_placeholder.text(f"Predictions: {st.session_state.predictions}")
             door_state_placeholder.text(st.session_state.door_state)
         time.sleep(0.1)
@@ -155,7 +172,7 @@ def process_uploaded_video(video_path, image_placeholder, info_placeholder, door
         annotated_frame, predictions = process_frame(frame)
         image_placeholder.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB), channels="RGB")
         st.session_state.predictions = predictions
-        st.session_state.door_state = f"Food Door: {'Open for ' + current_cat if door_open else 'Closed'}"
+        st.session_state.door_state = f"Food Door: {'Open for ' + (current_cat if current_cat else '') if door_open else 'Closed'}"
         info_placeholder.text(f"Predictions: {st.session_state.predictions}")
         door_state_placeholder.text(st.session_state.door_state)
     cap.release()
@@ -164,10 +181,9 @@ def process_uploaded_video(video_path, image_placeholder, info_placeholder, door
 def main():
     global conf_threshold
 
-    # Center the title
     st.markdown("<h1 style='text-align: center;'>Cat Detection and Control System</h1>", unsafe_allow_html=True)
 
-    # Slider for confidence threshold under the title
+    # Slider for confidence threshold
     threshold = st.slider('Confidence Threshold', min_value=0.0, max_value=1.0, value=conf_threshold, key="confidence_threshold")
     if threshold != conf_threshold:
         conf_threshold = threshold
@@ -181,7 +197,7 @@ def main():
     info_placeholder.text(f"Predictions: {st.session_state.predictions}")
     door_state_placeholder.text(st.session_state.door_state)
 
-    # Sidebar options as buttons
+    # Sidebar options
     selected_option = st.sidebar.radio("Select Input Source", ["Laptop Camera", "Raspberry Pi Camera", "Upload Video"])
 
     if selected_option == "Laptop Camera" and not st.session_state.stream_started:
