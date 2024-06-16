@@ -195,3 +195,5 @@ azure_config.json
 
 # config ignore
 /AI/notebooks/config.json
+
+/uploads/
