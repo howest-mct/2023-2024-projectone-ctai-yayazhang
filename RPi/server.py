@@ -116,9 +116,11 @@ def command():
     if command == 'cat_orange':
         set_stepper_position('cat_orange')
         turn_led_green()
+        threading.Timer(2.0, lambda: set_stepper_position('close')).start()
     elif command == 'cat_niuniu':
         set_stepper_position('cat_niuniu')
         turn_led_green()
+        threading.Timer(2.0, lambda: set_stepper_position('close')).start()
     elif command == 'close':
         set_stepper_position('close')
         turn_led_red()
@@ -174,8 +176,10 @@ def handle_client(sock, shutdown_flag):
                 streaming_flag.clear()
             elif message == 'cat_orange':
                 set_stepper_position('cat_orange')
+                threading.Timer(2.0, lambda: set_stepper_position('close')).start()
             elif message == 'cat_niuniu':
                 set_stepper_position('cat_niuniu')
+                threading.Timer(2.0, lambda: set_stepper_position('close')).start()
             elif message == 'close':
                 set_stepper_position('close')
     except socket.timeout:
