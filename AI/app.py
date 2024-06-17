@@ -124,9 +124,11 @@ def send_led_command(color):
 if 'stream_started' not in st.session_state:
     st.session_state.stream_started = False
 if 'predictions' not in st.session_state:
-    st.session_state.predictions = "None"
+    st.session_state.predictions = []
 if 'door_state' not in st.session_state:
     st.session_state.door_state = "Closed"
+if 'open_food_door' not in st.session_state:
+    st.session_state.open_food_door = None
 
 def start_laptop_camera_stream(image_placeholder, info_placeholder, door_state_placeholder):
     st.session_state.stream_started = True
@@ -145,6 +147,12 @@ def start_laptop_camera_stream(image_placeholder, info_placeholder, door_state_p
         st.session_state.door_state = f"Food Door: {'Open for ' + (current_cat if current_cat else '') if door_open else 'Closed'}"
         info_placeholder.text(f"Predictions: {st.session_state.predictions}")
         door_state_placeholder.text(st.session_state.door_state)
+        
+        # Handle door open command
+        if st.session_state.open_food_door:
+            send_command_and_close(st.session_state.open_food_door)
+            st.session_state.open_food_door = None
+        
         time.sleep(0.1)
     cap.release()
 
@@ -159,6 +167,12 @@ def start_rpi_camera_stream(image_placeholder, info_placeholder, door_state_plac
             st.session_state.door_state = f"Food Door: {'Open for ' + (current_cat if current_cat else '') if door_open else 'Closed'}"
             info_placeholder.text(f"Predictions: {st.session_state.predictions}")
             door_state_placeholder.text(st.session_state.door_state)
+            
+            # Handle door open command
+            if st.session_state.open_food_door:
+                send_command_and_close(st.session_state.open_food_door)
+                st.session_state.open_food_door = None
+            
         time.sleep(0.1)
     if client_socket:
         client_socket.sendall('stop_video'.encode())
@@ -180,8 +194,22 @@ def process_uploaded_video(video_path, image_placeholder, info_placeholder, door
         st.session_state.door_state = f"Food Door: {'Open for ' + (current_cat if current_cat else '') if door_open else 'Closed'}"
         info_placeholder.text(f"Predictions: {st.session_state.predictions}")
         door_state_placeholder.text(st.session_state.door_state)
+        
+        # Handle door open command
+        if st.session_state.open_food_door:
+            send_command_and_close(st.session_state.open_food_door)
+            st.session_state.open_food_door = None
+            
     cap.release()
     st.sidebar.success("Video processed successfully")
+
+def open_food_door_for_cat(cat):
+    st.session_state.open_food_door = cat
+
+def send_command_and_close(cat):
+    send_command(f"cat_{cat.lower()}")
+    send_led_command('green')
+    threading.Timer(2.0, lambda: close_door()).start()
 
 def main():
     global conf_threshold
@@ -205,13 +233,25 @@ def main():
     # Sidebar options
     selected_option = st.sidebar.radio("Select Input Source", ["Laptop Camera", "Raspberry Pi Camera", "Upload Video"])
 
-    if selected_option == "Laptop Camera" and not st.session_state.stream_started:
-        st.sidebar.button('Start Laptop Camera Stream', on_click=lambda: start_laptop_camera_stream(image_placeholder, info_placeholder, door_state_placeholder), key="start_laptop")
+    if selected_option == "Laptop Camera":
+        if not st.session_state.stream_started:
+            st.sidebar.button('Start Laptop Camera Stream', on_click=lambda: start_laptop_camera_stream(image_placeholder, info_placeholder, door_state_placeholder), key="start_laptop")
         st.sidebar.button('Stop Video Stream', on_click=lambda: st.session_state.update(stream_started=False), key="stop_laptop")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.button('Open Food Door for Niuniu', on_click=lambda: open_food_door_for_cat('Niuniu'))
+        with col2:
+            st.button('Open Food Door for Orange', on_click=lambda: open_food_door_for_cat('Orange'))
 
-    if selected_option == "Raspberry Pi Camera" and not st.session_state.stream_started:
-        st.sidebar.button('Start Raspberry Pi Camera Stream', on_click=lambda: start_rpi_camera_stream(image_placeholder, info_placeholder, door_state_placeholder), key="start_rpi")
+    if selected_option == "Raspberry Pi Camera":
+        if not st.session_state.stream_started:
+            st.sidebar.button('Start Raspberry Pi Camera Stream', on_click=lambda: start_rpi_camera_stream(image_placeholder, info_placeholder, door_state_placeholder), key="start_rpi")
         st.sidebar.button('Stop Video Stream', on_click=lambda: st.session_state.update(stream_started=False), key="stop_rpi")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.button('Open Food Door for Niuniu', on_click=lambda: open_food_door_for_cat('Niuniu'))
+        with col2:
+            st.button('Open Food Door for Orange', on_click=lambda: open_food_door_for_cat('Orange'))
 
     if selected_option == "Upload Video":
         uploaded_file = st.sidebar.file_uploader("Upload Video", key="upload_video")
