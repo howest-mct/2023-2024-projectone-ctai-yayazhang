@@ -12,18 +12,20 @@ camera = cv2.VideoCapture(0)
 camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 camera.set(cv2.CAP_PROP_FPS, 30)
 
-# GPIO setup for the stepper motor
+# GPIO setup for the stepper motor and RGB LED
 GPIO.setmode(GPIO.BCM)
 control_pins = [19, 13, 6, 5]
-LED_GREEN = 18
-LED_RED = 23
+LED_RED = 5
+LED_GREEN = 6
+LED_BLUE = 13
 
 for pin in control_pins:
     GPIO.setup(pin, GPIO.OUT)
     GPIO.output(pin, 0)
 
-GPIO.setup(LED_GREEN, GPIO.OUT)
 GPIO.setup(LED_RED, GPIO.OUT)
+GPIO.setup(LED_GREEN, GPIO.OUT)
+GPIO.setup(LED_BLUE, GPIO.OUT)
 
 # Stepper motor step sequence
 step_sequence = [
@@ -68,11 +70,18 @@ def set_stepper_position(position):
 
 def turn_led_red():
     GPIO.output(LED_GREEN, False)
+    GPIO.output(LED_BLUE, False)
     GPIO.output(LED_RED, True)
 
 def turn_led_green():
     GPIO.output(LED_RED, False)
+    GPIO.output(LED_BLUE, False)
     GPIO.output(LED_GREEN, True)
+
+def turn_led_blue():
+    GPIO.output(LED_RED, False)
+    GPIO.output(LED_GREEN, False)
+    GPIO.output(LED_BLUE, True)
 
 app = Flask(__name__)
 
@@ -113,6 +122,19 @@ def command():
     elif command == 'close':
         set_stepper_position('close')
         turn_led_red()
+    return '', 204
+
+@app.route('/led', methods=['POST'])
+def led():
+    data = request.json
+    color = data.get('color')
+    print(f"Received LED command: {color}")  # Debug statement
+    if color == 'green':
+        turn_led_green()
+    elif color == 'red':
+        turn_led_red()
+    elif color == 'blue':
+        turn_led_blue()
     return '', 204
 
 def setup_socket_server():
