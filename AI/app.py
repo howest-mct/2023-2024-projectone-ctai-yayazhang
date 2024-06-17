@@ -102,6 +102,7 @@ def process_frame(frame):
                     current_cat = first_detected_cat
                     last_detection_time = current_time
                     door_open = True
+                    send_led_command('green')
                     threading.Timer(2.0, lambda: close_door()).start()
     return annotated_frame, predictions
 
@@ -109,11 +110,15 @@ def close_door():
     global door_open, current_cat, cat_detection_queue
     with door_state_lock:
         send_command('close')
+        send_led_command('red')
         door_open = False
-        # Do not reset current_cat to allow for new detection logic
 
 def send_command(command):
     requests.post(f'http://{raspberry_pi_ip}:5000/command', json={'command': command})
+
+def send_led_command(color):
+    print(f"Sending LED command: {color}")  # Debug statement
+    requests.post(f'http://{raspberry_pi_ip}:5000/led', json={'color': color})
 
 # Initialize Streamlit session state
 if 'stream_started' not in st.session_state:
