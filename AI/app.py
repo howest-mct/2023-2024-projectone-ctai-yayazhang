@@ -227,7 +227,7 @@ def main():
     info_placeholder = st.empty()
     door_state_placeholder = st.empty()
     
-    info_placeholder.text(f"Predictions: {st.session_state.predictions}")
+    info_placeholder.text(f"Approaching cat: {st.session_state.predictions}")
     door_state_placeholder.text(st.session_state.door_state)
 
     # Sidebar options
